@@ -2,13 +2,13 @@
 
 import type React from "react";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon, PlayIcon, PauseIcon, RefreshCwIcon, UploadIcon, Settings2Icon, Terminal } from "lucide-react";
+import {  PlayIcon, PauseIcon, RefreshCwIcon, Settings2Icon, Terminal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { loadSpriteAsMatrix } from "@/app/actions/GenerateMatrix";
@@ -22,12 +22,15 @@ export default function GameOfLife() {
 	const [speed, setSpeed] = useState(100);
 	const [cellSize, setCellSize] = useState(1);
 	const [grid, setGrid] = useState<boolean[][]>([]);
+	const [downsampleFactor, setDownsampleFactor] = useState(1);
+	const [threshold, setThreshold] = useState(128);
 	const animationFrameRef = useRef<number | null>(null);
 	const lastUpdateTimeRef = useRef<number>(0);
 	const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 	const isRunningRef = useRef(isRunning);
 	isRunningRef.current = isRunning;
 	const [originalMatrix, setOriginalMatrix] = useState<number[][] | null>(null);
+	const [originalImageBuffer, setOriginalImageBuffer] = useState<ArrayBuffer | null>(null);
 
 	// Initialize grid based on canvas size and window resize
 	useEffect(() => {
@@ -137,8 +140,12 @@ export default function GameOfLife() {
 				return;
 			}
 
+			// Store the original image buffer for later processing
+			setOriginalImageBuffer(arrayBuffer);
+			
 			try {
-				const matrix = await loadSpriteAsMatrix(arrayBuffer);
+				// Process the image with current downsampling factor and threshold
+				const matrix = await loadSpriteAsMatrix(arrayBuffer, downsampleFactor, threshold);
 
 				// Basic validation (check if it's a non-empty 2D array)
 				if (!Array.isArray(matrix) || matrix.length === 0 || !Array.isArray(matrix[0])) {
@@ -158,7 +165,7 @@ export default function GameOfLife() {
 				applyMatrixToGrid(matrix);
 				setMessage({
 					type: "success",
-					text: `Image loaded successfully! Base size: ${matrix.length}x${matrix[0].length}. Use scale buttons to resize.`,
+					text: `Image loaded successfully! Base size: ${matrix.length}x${matrix[0].length}. Use settings to adjust.`,
 				});
 			} catch (error) {
 				setOriginalMatrix(null); // Clear original matrix on error
@@ -403,6 +410,34 @@ export default function GameOfLife() {
 		}
 	};
 
+	// Apply new downsampling or threshold settings to the image
+	const applyImageSettings = async () => {
+		if (!originalImageBuffer) {
+			setMessage({ type: "error", text: "No image loaded. Please upload an image first." });
+			return;
+		}
+
+		try {
+			setMessage({ type: "info", text: "Processing image with new settings..." });
+			const matrix = await loadSpriteAsMatrix(originalImageBuffer, downsampleFactor, threshold);
+			
+			// Store the processed matrix
+			setOriginalMatrix(matrix);
+			// Apply to grid
+			applyMatrixToGrid(matrix);
+			setMessage({
+				type: "success",
+				text: `Image processed! Size: ${matrix.length}x${matrix[0].length} with downsampling factor ${downsampleFactor}.`,
+			});
+		} catch (error) {
+			setMessage({
+				type: "error",
+				text: `Error processing image: ${error instanceof Error ? error.message : "Unknown error"}`,
+			});
+			console.error("Error applying new image settings:", error);
+		}
+	};
+
 	return (
 		<div
 			className="relative w-full h-screen overflow-hidden bg-black"
@@ -529,6 +564,70 @@ export default function GameOfLife() {
 									</Alert>
 								)}
 							</div>
+
+							{/* Image Processing Section */}
+							<div className="pt-4 border-t">
+								<h3 className="font-medium mb-3">Image Processing</h3>
+								
+								{/* Downsampling factor slider */}
+								<div className="space-y-2">
+									<Label htmlFor="downsampling">Downsampling Factor: {downsampleFactor}</Label>
+									<Slider
+										id="downsampling"
+										min={1}
+										max={5}
+										step={1}
+										value={[downsampleFactor]}
+										onValueChange={(value) => setDownsampleFactor(value[0])}
+									/>
+									<p className="text-xs text-muted-foreground">
+										Higher values reduce the size and detail of the processed image.
+									</p>
+								</div>
+								
+								{/* Threshold slider */}
+								<div className="mt-4 space-y-2">
+									<Label htmlFor="threshold">Brightness Threshold: {threshold}</Label>
+									<Slider
+										id="threshold"
+										min={0}
+										max={255}
+										step={5}
+										value={[threshold]}
+										onValueChange={(value) => setThreshold(value[0])}
+									/>
+									<p className="text-xs text-muted-foreground">
+										Pixels brighter than this threshold will become alive cells.
+									</p>
+								</div>
+								
+								{/* Apply settings button */}
+								<Button 
+									className="mt-4 w-full"
+									onClick={applyImageSettings}
+									disabled={!originalImageBuffer}
+								>
+									Apply Image Settings
+								</Button>
+							</div>
+
+							{/* Scale buttons */}
+							{originalMatrix && (
+								<div className="pt-4 border-t">
+									<h3 className="font-medium mb-3">Scale Matrix</h3>
+									<div className="flex gap-2">
+										<Button size="sm" onClick={() => handleScaleMatrix(0.5)} variant="outline">
+											50%
+										</Button>
+										<Button size="sm" onClick={() => handleScaleMatrix(1)} variant="outline">
+											100%
+										</Button>
+										<Button size="sm" onClick={() => handleScaleMatrix(2)} variant="outline">
+											200%
+										</Button>
+									</div>
+								</div>
+							)}
 
 							{/* Help */}
 							<div className="space-y-4">

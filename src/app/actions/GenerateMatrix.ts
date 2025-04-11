@@ -1,16 +1,12 @@
-
 "use server";
 
 import { Jimp } from 'jimp'; 
-
-
-
+import fs from 'fs/promises';	
 
 // Remove fs import as we won't save to file here
 // import fs from 'fs/promises';
 
 /**
-
  * Generates a matrix from an uploaded image file
  * Returns a 2D matrix of 0 (black) / 1 (white) values based on a threshold
  */
@@ -24,7 +20,6 @@ export async function generateMatrixFromImage(
 		
 		// Load image using Jimp from buffer
 		const image = await Jimp.read(buffer);
-
 
 		const width = image.bitmap.width;
 		const height = image.bitmap.height;
@@ -50,7 +45,6 @@ export async function generateMatrixFromImage(
 		return matrix;
 
 	} catch (error) {
-
 		console.error("Error processing image:", error);
 		throw error;
 	}
@@ -73,10 +67,7 @@ export async function downsampleMatrix(matrix: number[][], factor: number): Prom
 	}
 	
 	return result;
-
 }
-*/
-
 
 /**
  * Process an image file and return a matrix suitable for Game of Life
@@ -96,6 +87,22 @@ export async function processImageToMatrix(
 	}
 	
 	return matrix;
+}
+
+/**
+ * Processes an uploaded image file into a Game of Life matrix
+ * This is the main server action that will be called from the client
+ */
+export async function loadSpriteAsMatrix(
+	arrayBuffer: ArrayBuffer,
+	downsampleFactor: number = 1,
+	threshold: number = 128
+): Promise<number[][]> {
+	// Convert ArrayBuffer to Uint8Array
+	const uint8Array = new Uint8Array(arrayBuffer);
+	
+	// Process the image
+	return processImageToMatrix(uint8Array, downsampleFactor, threshold);
 }
 
 /**
