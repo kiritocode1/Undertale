@@ -1,10 +1,16 @@
+
 "use server";
 
-import { Jimp } from 'jimp'; // Correct named import
+import { Jimp } from 'jimp'; 
 
-import fs from 'fs/promises'; // Import fs module for file operations
+
+
+
+// Remove fs import as we won't save to file here
+// import fs from 'fs/promises';
 
 /**
+
  * Generates a matrix from an uploaded image file
  * Returns a 2D matrix of 0 (black) / 1 (white) values based on a threshold
  */
@@ -18,6 +24,7 @@ export async function generateMatrixFromImage(
 		
 		// Load image using Jimp from buffer
 		const image = await Jimp.read(buffer);
+
 
 		const width = image.bitmap.width;
 		const height = image.bitmap.height;
@@ -35,7 +42,7 @@ export async function generateMatrixFromImage(
 
 				// Convert to grayscale via average
 				const gray = (r + g + b) / 3;
-				row.push(gray > threshold ? 1 : 0);
+				row.push(gray > threshold ? 1 : 0); // 1 for white/bright, 0 for black/dark
 			}
 			matrix.push(row);
 		}
@@ -43,6 +50,7 @@ export async function generateMatrixFromImage(
 		return matrix;
 
 	} catch (error) {
+
 		console.error("Error processing image:", error);
 		throw error;
 	}
@@ -65,7 +73,10 @@ export async function downsampleMatrix(matrix: number[][], factor: number): Prom
 	}
 	
 	return result;
+
 }
+*/
+
 
 /**
  * Process an image file and return a matrix suitable for Game of Life
