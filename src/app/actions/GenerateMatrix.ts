@@ -1,5 +1,5 @@
 import { Jimp } from 'jimp'; // Correct named import
-import path from 'path'; // Import path module for resolving file paths
+
 import fs from 'fs/promises'; // Import fs module for file operations
 
 /**
