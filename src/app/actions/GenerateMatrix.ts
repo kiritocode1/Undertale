@@ -89,8 +89,8 @@ async function saveMatrixToFile(matrix: number[][], filePath: string): Promise<v
 // --- Example Usage ---
 
 // Define the path to the image relative to the script's execution directory
-const imagePath = 'sans.png';
-const outputPath = 'input.txt';
+const imagePath = 'MIYAMOTO.png';
+const outputPath = 'MIYAMOTO.txt';
 
 // Ensure the image file 'flowey.png' exists in the same directory
 // where you run the 'bun run' command, or provide a correct relative/absolute path.
@@ -99,7 +99,7 @@ loadSpriteAsMatrix(imagePath)
 		console.log(`Original matrix dimensions: ${matrix[0]?.length || 0}x${matrix.length}`);
 		
 		// Downsample the matrix to reduce size to approximately 1/40th
-		const downsamplingFactor = 6.3; // Taking every ~6th pixel ≈ 1/36th (6²) the size
+		const downsamplingFactor = 0; // Taking every ~6th pixel ≈ 1/36th (6²) the size
 		const downsampledMatrix = downsampleMatrix(matrix, Math.round(downsamplingFactor));
 		console.log(`Downsampled matrix dimensions: ${downsampledMatrix[0]?.length || 0}x${downsampledMatrix.length}`);
 		
