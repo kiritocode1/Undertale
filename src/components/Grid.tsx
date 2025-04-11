@@ -26,7 +26,7 @@ export default function GameOfLife() {
 		type: "info",
 		text: "Upload a matrix file or use the default pattern",
 	});
-	const [showControls, setShowControls] = useState(true);
+	// const [showControls, setShowControls] = useState(true);
 
 	// Initialize grid based on canvas size and window resize
 	useEffect(() => {
@@ -142,11 +142,13 @@ export default function GameOfLife() {
 					// Try to parse as JSON first
 					matrix = JSON.parse(cleanedContent);
 				} catch (jsonError) {
-					// If JSON parsing fails, try to evaluate as JavaScript
+                    // If JSON parsing fails, try to evaluate as JavaScript
+                    console.log(jsonError)
 					try {
 						// Use Function constructor to evaluate the string as JavaScript
 						matrix = new Function("return " + cleanedContent)();
-					} catch (evalError) {
+                    } catch (evalError) {
+                        console.log(evalError)
 						throw new Error("Could not parse file content as array");
 					}
 				}
@@ -385,9 +387,9 @@ export default function GameOfLife() {
 	};
 
 	// Toggle controls visibility
-	const toggleControls = () => {
-		setShowControls(!showControls);
-	};
+	// const toggleControls = () => {
+	// 	setShowControls(!showControls);
+	// };
 
 	return (
 		<div
