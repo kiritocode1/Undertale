@@ -2,15 +2,17 @@
 
 import type React from "react";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon, PlayIcon, PauseIcon, RefreshCwIcon, UploadIcon, Settings2Icon } from "lucide-react";
+import { InfoIcon, PlayIcon, PauseIcon, RefreshCwIcon, UploadIcon, Settings2Icon, Terminal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { loadSpriteAsMatrix } from "@/app/actions/GenerateMatrix";
+import { scaleMatrix } from "@/lib/utils";
 
 export default function GameOfLife() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,15 +20,14 @@ export default function GameOfLife() {
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isRunning, setIsRunning] = useState(false);
 	const [speed, setSpeed] = useState(100);
-	const [cellSize, setCellSize] = useState(5);
+	const [cellSize, setCellSize] = useState(1);
 	const [grid, setGrid] = useState<boolean[][]>([]);
 	const animationFrameRef = useRef<number | null>(null);
 	const lastUpdateTimeRef = useRef<number>(0);
-	const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string }>({
-		type: "info",
-		text: "Upload a matrix file or use the default pattern",
-	});
-	// const [showControls, setShowControls] = useState(true);
+	const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+	const isRunningRef = useRef(isRunning);
+	isRunningRef.current = isRunning;
+	const [originalMatrix, setOriginalMatrix] = useState<number[][] | null>(null);
 
 	// Initialize grid based on canvas size and window resize
 	useEffect(() => {
@@ -70,10 +71,10 @@ export default function GameOfLife() {
 
 			// Add "404" text pattern
 			const text404 = [
-				[1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
-				[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-				[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-				[1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],
+				[1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+				[1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1],
+				[0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+				[0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1],
 			];
 
 			const text404Row = Math.floor(rows / 4);
@@ -113,81 +114,69 @@ export default function GameOfLife() {
 	};
 
 	// Handle file selection
-	const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
-		if (!file) return;
+		if (!file) {
+			setMessage({ type: "error", text: "No file selected." });
+			return;
+		}
 
+		// Check if the file is an image
+		if (!file.type.startsWith("image/")) {
+			setMessage({ type: "error", text: "Please upload an image file (PNG, JPG, etc.)." });
+			return;
+		}
+
+		setMessage(null); // Clear previous messages
 		const reader = new FileReader();
-		reader.onload = (e) => {
+
+		reader.onload = async (e) => {
+			const arrayBuffer = e.target?.result as ArrayBuffer;
+			if (!arrayBuffer) {
+				setMessage({ type: "error", text: "Failed to read file." });
+				return;
+			}
+
 			try {
-				const content = e.target?.result as string;
+				const matrix = await loadSpriteAsMatrix(arrayBuffer);
 
-				// Try to parse the content as a JavaScript array of arrays
-				// First, clean up the content to make it valid JSON
-				let cleanedContent = content
-					.replace(/\r?\n/g, "") // Remove newlines
-					.replace(/\s+/g, " ") // Normalize whitespace
-					.trim();
-
-				// If the content is wrapped in brackets, keep it as is
-				// Otherwise, add brackets to make it a valid array
-				if (!cleanedContent.startsWith("[")) {
-					cleanedContent = "[" + cleanedContent + "]";
-				}
-
-				// Parse the content as JSON
-				let matrix: number[][];
-
-				try {
-					// Try to parse as JSON first
-					matrix = JSON.parse(cleanedContent);
-				} catch (jsonError) {
-                    // If JSON parsing fails, try to evaluate as JavaScript
-                    console.log(jsonError)
-					try {
-						// Use Function constructor to evaluate the string as JavaScript
-						matrix = new Function("return " + cleanedContent)();
-                    } catch (evalError) {
-                        console.log(evalError)
-						throw new Error("Could not parse file content as array");
-					}
-				}
-
-				// Validate the matrix
-				if (!Array.isArray(matrix) || !matrix.length || !Array.isArray(matrix[0])) {
-					setMessage({
-						type: "error",
-						text: "Error: File does not contain a valid array of arrays",
-					});
+				// Basic validation (check if it's a non-empty 2D array)
+				if (!Array.isArray(matrix) || matrix.length === 0 || !Array.isArray(matrix[0])) {
+					setMessage({ type: "error", text: "Invalid matrix returned from server." });
 					return;
 				}
-
-				// Check if all elements are 0 or 1
+				// Optional: Further validation if needed (e.g., check for 0s and 1s)
 				const isValid = matrix.every((row) => Array.isArray(row) && row.every((cell) => cell === 0 || cell === 1));
-
 				if (!isValid) {
-					setMessage({
-						type: "error",
-						text: "Error: Array should contain only 0s and 1s",
-					});
+					setMessage({ type: "error", text: "Processed matrix contains invalid values (should be 0 or 1)." });
 					return;
 				}
 
-				// Apply the matrix to the grid
+				// Store the loaded matrix as the original
+				setOriginalMatrix(matrix);
+				// Apply the original matrix to the grid initially
 				applyMatrixToGrid(matrix);
 				setMessage({
 					type: "success",
-					text: `Matrix loaded successfully! Size: ${matrix.length}x${matrix[0].length}`,
+					text: `Image loaded successfully! Base size: ${matrix.length}x${matrix[0].length}. Use scale buttons to resize.`,
 				});
 			} catch (error) {
+				setOriginalMatrix(null); // Clear original matrix on error
 				setMessage({
 					type: "error",
-					text: "Error parsing file. Make sure it contains a valid array of arrays with 0s and 1s.",
+					text: `Error processing image: ${error instanceof Error ? error.message : "Unknown error"}`,
 				});
-				console.error("Error parsing file:", error);
+				console.error("Error processing image via server action:", error);
 			}
 		};
-		reader.readAsText(file);
+
+		reader.onerror = () => {
+			setMessage({ type: "error", text: "Error reading file." });
+			console.error("Error reading file:", reader.error);
+		};
+
+		// Read the file as ArrayBuffer
+		reader.readAsArrayBuffer(file);
 	};
 
 	// Apply the matrix to the grid
@@ -386,10 +375,33 @@ export default function GameOfLife() {
 		}
 	};
 
-	// Toggle controls visibility
-	// const toggleControls = () => {
-	// 	setShowControls(!showControls);
-	// };
+	// Handler for scaling buttons
+	const handleScaleMatrix = (factor: number) => {
+		if (!originalMatrix) {
+			setMessage({ type: "error", text: "Load an image first before scaling." });
+			return;
+		}
+		if (isRunning) {
+			setMessage({ type: "error", text: "Pause the simulation before scaling." });
+			return;
+		}
+
+		try {
+			const scaled = scaleMatrix(originalMatrix, factor);
+			if (scaled.length === 0 || scaled[0].length === 0) {
+				setMessage({ type: "error", text: "Scaling resulted in an empty matrix." });
+				return;
+			}
+			applyMatrixToGrid(scaled);
+			setMessage({
+				type: "success",
+				text: `Matrix scaled by ${factor}x. New size: ${scaled.length}x${scaled[0].length}`,
+			});
+		} catch (error) {
+			setMessage({ type: "error", text: "Failed to scale matrix." });
+			console.error("Error scaling matrix:", error);
+		}
+	};
 
 	return (
 		<div
@@ -495,7 +507,7 @@ export default function GameOfLife() {
 									<Input
 										ref={fileInputRef}
 										type="file"
-										accept=".txt,.json,.js"
+										accept="image/png, image/jpeg, image/gif, image/bmp"
 										className="hidden"
 										onChange={handleFileUpload}
 									/>
@@ -504,15 +516,15 @@ export default function GameOfLife() {
 										variant="outline"
 										className="w-full"
 									>
-										<UploadIcon className="mr-2 h-4 w-4" />
+										<Terminal className="mr-2 h-4 w-4" />
 										Choose File
 									</Button>
 								</div>
 
 								{message && (
 									<Alert variant={message.type === "error" ? "destructive" : "default"}>
-										<InfoIcon className="h-4 w-4" />
-										<AlertTitle>{message.type === "error" ? "Error" : message.type === "success" ? "Success" : "Info"}</AlertTitle>
+										<Terminal className="h-4 w-4" />
+										<AlertTitle>{message.type === "error" ? "Error" : "Success"}</AlertTitle>
 										<AlertDescription>{message.text}</AlertDescription>
 									</Alert>
 								)}
